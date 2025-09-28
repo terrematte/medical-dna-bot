@@ -82,8 +82,9 @@ if userPrompt:
                 answer = resp.text.strip()
             if not answer:
                 answer = "⚠️ The API returned a empty answer."
-            placeholder.write(answer)
             st.session_state.messages.append(Message(answer, isChatbot=True))
+            placeholder.write(answer)
+
     except requests.RequestException as e:
         msg = f"❌ Error on contact API: {e}"
         placeholder.write(msg)
