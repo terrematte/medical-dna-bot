@@ -56,7 +56,7 @@ if len(st.session_state.messages) == 0:
 for m in st.session_state.messages:
     role = "assistant" if m.isChatbot else "user"
     with st.chat_message(role, avatar="🤖" if role == "assistant" else "👤"):
-        st.markdown(m.content)
+        st.write(m.content)
 
 # --- Entrada do usuário
 userPrompt = st.chat_input(disabled=st.session_state.waitingResponse, placeholder="Ask me something...")
