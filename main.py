@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 API_URL = "https://med-protocols-ai-main.azurewebsites.net/ai"
 
+
 # --- Cole seu resumo aqui (ou use st.secrets["CHATBOT_SUMMARY"]) ---
 CHATBOT_SUMMARY = """
 Integrating Clinical Guidelines and Genomic Data with AI: 
@@ -21,20 +22,42 @@ Keywords:
 Multi-Agent Systems. Generative AI. Large Language Models. Precision Medicine.
 """
 
-@dataclass
+
 class Message:
     content: str
+    userName: str
     isChatbot: bool
-    userName: str = "User"
 
-# Estado inicial
+    def __init__(self, content, userName="User", isChatbot=False):
+        self.content = content
+        self.userName = userName
+        self.isChatbot = isChatbot
+
+def HandleChatbotResponse(response, *args, **kwargs):
+    if response.status_code == 200:
+        print(f"Response received: {response.text}")
+        message = response.text
+        if(message[0] == '"'):
+            message = message[1:-1]
+
+        if(message[-1] == '"'):
+            message = message[:-1]
+        st.session_state.messages.append(Message(message, isChatbot=True, userName="Chatbot"))
+        st.chat_message("assistant").write(message)
+    else:
+        st.error("Error on obtaining response message.")
+
+    st.session_state.waitingResponse = False
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
 if "waitingResponse" not in st.session_state:
     st.session_state.waitingResponse = False
 
 st.set_page_config(page_title="Chatbot")
 st.title("Med Protocols Chat 💬")
+
 
 # --- Boas-vindas com logo + resumo (só na primeira visita) ---
 if len(st.session_state.messages) == 0:
@@ -51,44 +74,14 @@ if len(st.session_state.messages) == 0:
         Message("Welcome! This chatbot integrates clinical guidelines with genomic data through AI.", isChatbot=True, userName="Bot")
     )
 
+for message in st.session_state.messages:
+    st.chat_message("assistant" if message.isChatbot else "user").write(message.content)
 
-# --- Histórico
-for m in st.session_state.messages:
-    role = "assistant" if m.isChatbot else "user"
-    with st.chat_message(role):
-        st.write(m.content)
 
-# --- Entrada do usuário
-userPrompt = st.chat_input(disabled=st.session_state.waitingResponse, placeholder="Ask me something...")
-
-if userPrompt:
+if userPrompt := st.chat_input(disabled=st.session_state.waitingResponse, placeholder="Ask me something..."):
+    print(f"User prompt: {userPrompt}")
     st.chat_message("user").write(userPrompt)
-    st.session_state.messages.append(Message(userPrompt, isChatbot=False))
+    st.session_state.messages.append(Message(userPrompt, isChatbot=False, userName="User"))
     st.session_state.waitingResponse = True
-
-    bot_box = st.chat_message("assistant")
-    placeholder = bot_box.empty()
-
-    try:
-        with st.spinner("Thinking..."):
-            # Incluímos o resumo como contexto para a API (ajuste a chave conforme seu backend)
-            params = {"query": userPrompt, "user_id": 1, "system_summary": CHATBOT_SUMMARY}
-            resp = requests.get(API_URL, params=params, timeout=60)
-            resp.raise_for_status()
-            try:
-                data = resp.json()
-                answer = data.get("answer") or data.get("message") or resp.text.strip()
-            except ValueError:
-                answer = resp.text.strip()
-            if not answer:
-                answer = "⚠️ The API returned a empty answer."
-            st.session_state.messages.append(Message(answer, isChatbot=True))
-            placeholder.write(answer)
-
-    except requests.RequestException as e:
-        msg = f"❌ Error on contact API: {e}"
-        placeholder.write(msg)
-        st.session_state.messages.append(Message(msg, isChatbot=True))
-    finally:
-        st.session_state.waitingResponse = False
-        st.rerun()
+    params = {"query": userPrompt, "user_id": 1}
+    requests.get(API_URL, params=params, hooks={"response": [HandleChatbotResponse]})
