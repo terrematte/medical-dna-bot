@@ -1,9 +1,30 @@
 import streamlit as st
 import requests
+import json
+import re
 from dataclasses import dataclass
 
 API_URL = "https://med-protocols-ai-main.azurewebsites.net/ai"
 
+# --- helper: render markdown preservando \n ---
+def render_markdown_preserving_newlines(md: str):
+    """
+    Converte quebras simples \n em quebras de linha do Markdown ("  \n"),
+    mantendo \n\n como parágrafo e preservando blocos de código ```...```.
+    """
+    parts = re.split(r"(```[\s\S]*?```)", md)  # separa blocos de código
+    for i in range(0, len(parts), 2):  # só processa trechos fora de ```
+        segment = parts[i]
+        # substitui \n simples por "  \n" (não toca em \n\n)
+        segment = re.sub(r"(?<!\n)\n(?!\n)", "  \n", segment)
+        parts[i] = segment
+    st.markdown("".join(parts))
+
+@dataclass
+class Message:
+    content: str
+    userName: str = "User"
+    isChatbot: bool = False
 
 # --- Cole seu resumo aqui (ou use st.secrets["CHATBOT_SUMMARY"]) ---
 CHATBOT_SUMMARY = """
@@ -22,64 +43,67 @@ Keywords:
 Multi-Agent Systems. Generative AI. Large Language Models. Precision Medicine.
 """
 
-
-class Message:
-    content: str
-    userName: str
-    isChatbot: bool
-
-    def __init__(self, content, userName="User", isChatbot=False):
-        self.content = content
-        self.userName = userName
-        self.isChatbot = isChatbot
-
 def HandleChatbotResponse(response, *args, **kwargs):
-    if response.status_code == 200:
-        print(f"Response received: {response.text}")
-        message = response.text
-        if(message[0] == '"'):
-            message = message[1:-1]
+    try:
+        response.raise_for_status()
+        raw = response.text or ""
+        # 1) tentar decodificar como JSON (muitos backends retornam "string" com \n)
+        try:
+            decoded = json.loads(raw)
+            # se veio {"answer": "..."} pega campo; se veio "..." já é string
+            if isinstance(decoded, dict):
+                message = decoded.get("answer") or decoded.get("message") or decoded.get("text") or raw
+            else:
+                message = str(decoded)
+        except json.JSONDecodeError:
+            # fallback: texto puro
+            message = raw
 
-        if(message[-1] == '"'):
-            message = message[:-1]
+        # 2) guarda a versão bruta no histórico
         st.session_state.messages.append(Message(message, isChatbot=True, userName="Chatbot"))
-        st.chat_message("assistant").markdown(message)
-    else:
+
+        # 3) exibe com quebras de linha preservadas (Markdown friendly)
+        with st.chat_message("assistant"):
+            render_markdown_preserving_newlines(message)
+
+    except requests.RequestException:
         st.error("Error on obtaining response message.")
+    finally:
+        st.session_state.waitingResponse = False
 
-    st.session_state.waitingResponse = False
-
+# --- estado
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
 if "waitingResponse" not in st.session_state:
     st.session_state.waitingResponse = False
 
 st.set_page_config(page_title="Chatbot")
 st.title("Med Protocols Chat 💬")
 
-
 # --- Boas-vindas com logo + resumo (só na primeira visita) ---
 if len(st.session_state.messages) == 0:
     with st.chat_message("assistant"):
-        st.image("asset/logo.png", width=80)  # mantenha logo.png no diretório do app
-        st.markdown("**Welcome!**")
-        st.write("This chatbot integrates clinical guidelines with genomic data through AI.")
-        st.write("It uses large language models and adaptive RAG to support healthcare decision-making.")
-        st.write("Our proof-of-concept focuses on Type 2 Diabetes Mellitus and related genetic testing.")
-        st.write("The system aims to improve precision medicine, even in resource-limited settings.")
+        st.image("asset/logo.png", width=80)
+        st.markdown(
+            "**Welcome!**  \n"
+            "This chatbot integrates clinical guidelines with genomic data through AI.  \n"
+            "It uses large language models and adaptive RAG to support healthcare decision-making.  \n"
+            "Our proof-of-concept focuses on Type 2 Diabetes Mellitus and related genetic testing.  \n"
+            "The system aims to improve precision medicine, even in resource-limited settings."
+        )
         with st.expander("ℹ️ About this assistant."):
-            st.markdown(CHATBOT_SUMMARY.strip() or "_Sem resumo definido._")
+            render_markdown_preserving_newlines(CHATBOT_SUMMARY.strip() or "_No summary defined._")
     st.session_state.messages.append(
         Message("Welcome! This chatbot integrates clinical guidelines with genomic data through AI.", isChatbot=True, userName="Bot")
     )
 
+# --- histórico (usar markdown com preservação de \n)
 for message in st.session_state.messages:
-    st.chat_message("assistant" if message.isChatbot else "user").write(message.content)
+    with st.chat_message("assistant" if message.isChatbot else "user"):
+        render_markdown_preserving_newlines(message.content)
 
-
+# --- input
 if userPrompt := st.chat_input(disabled=st.session_state.waitingResponse, placeholder="Ask me something..."):
-    print(f"User prompt: {userPrompt}")
     st.chat_message("user").write(userPrompt)
     st.session_state.messages.append(Message(userPrompt, isChatbot=False, userName="User"))
     st.session_state.waitingResponse = True
