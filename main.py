@@ -43,4 +43,4 @@ if userPrompt := st.chat_input(disabled=st.session_state.waitingResponse, placeh
     st.chat_message("user").write(userPrompt)
     st.session_state.messages.append(Message(userPrompt, isChatbot=False, userName="Usuário"))
     st.session_state.waitingResponse = True
-    requests.get("http://localhost:8000/ai", params={"query": userPrompt, "user_id": 1}, hooks={"response": [HandleChatbotResponse]})
+    requests.get("https://med-protocols-ai-main.azurewebsites.net/ai", params={"query": userPrompt, "user_id": 1}, hooks={"response": [HandleChatbotResponse]})
