@@ -43,7 +43,7 @@ def HandleChatbotResponse(response, *args, **kwargs):
         if(message[-1] == '"'):
             message = message[:-1]
         st.session_state.messages.append(Message(message, isChatbot=True, userName="Chatbot"))
-        st.chat_message("assistant").write(message)
+        st.chat_message("assistant").markdown(message)
     else:
         st.error("Error on obtaining response message.")
 
