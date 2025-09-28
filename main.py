@@ -33,13 +33,13 @@ if "messages" not in st.session_state:
 if "waitingResponse" not in st.session_state:
     st.session_state.waitingResponse = False
 
-st.set_page_config(page_title="Chatbot", page_icon="🤖")
+st.set_page_config(page_title="Chatbot")
 st.title("Med Protocols Chat 💬")
 
 # --- Boas-vindas com logo + resumo (só na primeira visita) ---
 if len(st.session_state.messages) == 0:
-    with st.chat_message("assistant", avatar="🤖"):
-        st.image("asset/logo.png", width=120)  # mantenha logo.png no diretório do app
+    with st.chat_message("assistant"):
+        st.image("asset/logo.png", width=80)  # mantenha logo.png no diretório do app
         st.markdown("**Welcome!**")
         st.write("This chatbot integrates clinical guidelines with genomic data through AI.")
         st.write("It uses large language models and adaptive RAG to support healthcare decision-making.")
@@ -55,18 +55,18 @@ if len(st.session_state.messages) == 0:
 # --- Histórico
 for m in st.session_state.messages:
     role = "assistant" if m.isChatbot else "user"
-    with st.chat_message(role, avatar="🤖" if role == "assistant" else "👤"):
+    with st.chat_message(role):
         st.write(m.content)
 
 # --- Entrada do usuário
 userPrompt = st.chat_input(disabled=st.session_state.waitingResponse, placeholder="Ask me something...")
 
 if userPrompt:
-    st.chat_message("user", avatar="👤").write(userPrompt)
+    st.chat_message("user").write(userPrompt)
     st.session_state.messages.append(Message(userPrompt, isChatbot=False))
     st.session_state.waitingResponse = True
 
-    bot_box = st.chat_message("assistant", avatar="🤖")
+    bot_box = st.chat_message("assistant")
     placeholder = bot_box.empty()
 
     try:
